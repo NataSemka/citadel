@@ -2,19 +2,14 @@ package org.natasemka.citadel.server.controllers
 
 import javax.inject.{Inject, Named, Singleton}
 
-import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
-import akka.pattern.ask
 import akka.stream.Materializer
-import akka.stream.scaladsl.Flow
-import akka.util.Timeout
-import org.natasemka.citadel.server.actors.{ClientSocket, SessionManager}
+import org.natasemka.citadel.server.actors.ClientSocket
 import play.api.Logger
 import play.api.libs.json.{JsValue, Json}
 import play.api.libs.streams.ActorFlow
 import play.api.mvc._
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 
@@ -37,8 +32,6 @@ class CitadelController @Inject()
    */
   def ws: WebSocket = WebSocket.acceptOrResult[JsValue, JsValue] {
     case rh if sameOriginCheck(rh) =>
-      //wsFutureFlow(rh).map { flow =>
-      //Right(flow)
       Future.successful {
         Right(ActorFlow.actorRef(out => ClientSocket.props(out, citadelManager)))
       }.recover {
@@ -54,41 +47,7 @@ class CitadelController @Inject()
         Left(Forbidden("forbidden"))
       }
   }
-  
-//  def authenticate: Action[AnyContent] = Action.async {
-//    println("authenticating")
-//    Future(Ok())
-//  }
-//    Action.async { request: Request[AnyContent] =>
-//      val json = request.body.asJson.get
-//      val credentials = Json.fromJson[Credentials](json).get
-//      val futureResponse = sessionManager ? SignIn(credentials)
-//      futureResponse.recover {
-//        case e: Exception =>
-//          InternalServerError(Json.obj(
-//            "error" -> e.toString,
-//            "description" -> e.getMessage
-//          ))
-//      }
-//      futureResponse.map(response => {
-//        val r = response.asInstanceOf[String]
-//        Ok(r)
-//      })
-//    }
-
-  /**
-   * Creates a Future containing a Flow of JsValue in and out.
-   */
-  private def wsFutureFlow(request: RequestHeader): Future[Flow[JsValue, JsValue, NotUsed]] = {
-    // Use guice assisted injection to instantiate and configure the child actor.
-    implicit val timeout: Timeout = Timeout(1.second) // the first run in dev can take a while :-(
-    val future: Future[Any] = citadelManager ? SessionManager.Create
-    val futureFlow: Future[Flow[JsValue, JsValue, NotUsed]] = future.mapTo[Flow[JsValue, JsValue, NotUsed]]
-    futureFlow
-  }
-  
 }
-
 
 trait SameOriginCheck {
 
@@ -129,5 +88,3 @@ trait SameOriginCheck {
   }
 
 }
-
-case class Credentials(playerId: String, password: String)
