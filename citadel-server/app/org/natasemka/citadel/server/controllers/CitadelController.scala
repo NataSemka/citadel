@@ -30,7 +30,7 @@ class CitadelController @Inject()
    *
    * @return a fully realized websocket.
    */
-  def ws: WebSocket = WebSocket.acceptOrResult[JsValue, JsValue] {
+  def ws: WebSocket = WebSocket.acceptOrResult[String, String] {
     case rh if sameOriginCheck(rh) =>
       Future.successful {
         Right(ActorFlow.actorRef(out => ClientSocket.props(out, citadelManager)))

@@ -3,6 +3,7 @@ package org.natasemka.citadel.server.actors
 import javax.inject.Inject
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.event.LoggingReceive
 import akka.util.Timeout
 import com.google.inject.assistedinject.Assisted
 import org.natasemka.citadel.server.messages._
@@ -12,6 +13,7 @@ import play.api.libs.json._
 
 import scala.concurrent.duration._
 import scala.language.implicitConversions
+import scala.util.{Failure, Success, Try}
 
 class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRef)
                    extends Actor with ActorLogging
@@ -24,10 +26,17 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
   private var lobbyId: Option[String] = None
   private var sessionId: Option[String] = None
 
-  override def receive: Receive = {
-    case msg: JsValue => handleUserMessage(msg)
+  override def receive: Receive = LoggingReceive {
+    case msg: String => handleUserMessage(msg)
     case msg: CitadelMessageBody => handleServerMessage(msg)
-    case _ => out ! InvalidMessage
+    case msg => handleInvalidMessage(msg)
+  }
+
+  def handleUserMessage(msg: String): Unit = {
+    Try(Json.parse(msg)) match {
+      case Success(json) => handleUserMessage(json)
+      case Failure(e) => out ! e.getMessage
+    }
   }
 
   def handleUserMessage(msg: JsValue): Unit = {
@@ -37,20 +46,15 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
 
     val msgTypeLookup = msg \ MsgType
     val msgBodyLookup = msg \ Body
-    val response = (msgTypeLookup, msgBodyLookup) match {
+    (msgTypeLookup, msgBodyLookup) match {
       case (JsDefined(JsString(msgType)), JsDefined(msgBody)) =>
         msgType match {
           case AuthenticateMsg => authenticate(msgBody)
           case JoinGameMsg => joinGame(msgBody)
           case JoinLobbyMsg => joinLobby(msgBody)
-          case _ => Left(illegal(s"Unrecognized message type: $msgType"))
+          case _ => out ! s"Unrecognized message type: $msgType"
         }
-      case _ => Left(illegal(s"Invalid message format: $msg"))
-    }
-
-    response match {
-      case Right(_) =>
-      case Left (_) =>
+      case _ => out ! s"""{"type": "Rejected", "reason":"invalid message type: $msg"}"""
     }
   }
 
@@ -59,9 +63,9 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
       case JsSuccess(authInfo: Authenticate, _) => manager ! authInfo
       case e: JsError =>
         val notAuth: NotAuthenticated = NotAuthenticated(JsError.toJson(e).toString())
-        val res = Json.toJson(notAuth)
-        //out ! res
-        out ! "Not Authenticated"
+        val res = Json.stringify(Json.toJson(notAuth))
+        out ! res
+        //out ! "Not Authenticated"
     }
   }
 
@@ -94,14 +98,17 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
   }
 
+  def handleInvalidMessage(msg: Any) = {
+    val logMsg = s"Received invalid message: $msg"
+    logger.debug(logMsg)
+    out ! InvalidMessage
+  }
 }
 
 object ClientSocket {
   trait Factory {
     def apply(manager: ActorRef): Actor
   }
-
-  case class JoinLobby(id: String, topic: String)
 
   def props(out: ActorRef, manager: ActorRef) =
     Props(new ClientSocket(out, manager))

@@ -53,7 +53,7 @@ class LobbyActor extends Actor with ActorLogging {
 }
 
 trait WithMessage {
-  val msg: String = "???"
+  def msg: String = ???
 }
 
 trait AuthenticationResult extends WithMessage
