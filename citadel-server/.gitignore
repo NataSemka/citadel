@@ -18,6 +18,7 @@ dist
 /activator-sbt-*-shim.sbt
 /out
 /db
+scala-sdk
 
 # Ignore Play! working directory #
 bin
