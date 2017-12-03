@@ -38,7 +38,7 @@ initModel =
 
 
 type Msg
-    = DashboardModule
+    = DashboardComponent
 
 
 update : Msg -> Model -> Model
@@ -53,4 +53,9 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div []
-        [ h3 [] [ text "Dashboard page" ] ]
+        [ h3 []
+            [ text "Dashboard page" ]
+        , input
+            [ type_ "text" ]
+            []
+        ]

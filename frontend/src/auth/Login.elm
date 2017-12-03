@@ -65,12 +65,3 @@ view model =
                 [ text "Login" ]
             ]
         ]
-
-
-main : Program Never Model Msg
-main =
-    Html.beginnerProgram
-        { model = initModel
-        , update = update
-        , view = view
-        }

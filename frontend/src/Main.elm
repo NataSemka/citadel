@@ -5,24 +5,46 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Login
+import WebSocket
+
+
+-- MAIN
+
+
+main : Program Never Model Msg
+main =
+    Html.program
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
+
 
 
 -- MODEL
 
 
 type alias Model =
-    { page : Page
-    , dashboard : Dashboard.Model
+    { dashboard : Dashboard.Model
     , login : Login.Model
+    , page : Page
     }
 
 
 initModel : Model
 initModel =
-    { page = DashboardPage
-    , dashboard = Dashboard.initModel
+    { dashboard = Dashboard.initModel
     , login = Login.initModel
+    , page = DashboardPage
     }
+
+
+init : ( Model, Cmd Msg )
+init =
+    ( initModel
+    , Cmd.none
+    )
 
 
 type Page
@@ -38,27 +60,37 @@ type Msg
     = ChangePage Page
     | DashboardMsg Dashboard.Msg
     | LoginMsg Login.Msg
+    | NewMessage String
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        NewMessage str ->
+            ( model, Cmd.none )
+
         ChangePage page ->
-            { model
+            ( { model
                 | page = page
-            }
+              }
+            , Cmd.none
+            )
 
         DashboardMsg dashboardMsg ->
-            { model
+            ( { model
                 | dashboard =
                     Dashboard.update dashboardMsg model.dashboard
-            }
+              }
+            , Cmd.none
+            )
 
         LoginMsg loginMsg ->
-            { model
+            ( { model
                 | login =
                     Login.update loginMsg model.login
-            }
+              }
+            , Cmd.none
+            )
 
 
 
@@ -80,16 +112,10 @@ view model =
     in
     div []
         [ div []
-            [ a
-                [ href "#"
-                , onClick (ChangePage DashboardPage)
-                ]
+            [ a [ onClick (ChangePage DashboardPage) ]
                 [ text "Dashboard" ]
             , span [] [ text " | " ]
-            , a
-                [ href "#"
-                , onClick (ChangePage LoginPage)
-                ]
+            , a [ onClick (ChangePage LoginPage) ]
                 [ text "Log in" ]
             ]
         , hr [] []
@@ -98,13 +124,14 @@ view model =
 
 
 
--- MAIN
+-- SUCSCRIPTIONS
 
 
-main : Program Never Model Msg
-main =
-    Html.beginnerProgram
-        { model = initModel
-        , view = view
-        , update = update
-        }
+echoServer : String
+echoServer =
+    "ws://echo.websocket.org"
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    WebSocket.listen echoServer NewMessage
