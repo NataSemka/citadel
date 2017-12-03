@@ -28,6 +28,7 @@ object JsonMessage {
 
 object JsonMessages {
   val AuthenticateMsg: String = "Authenticate"
+  val SignInMsg: String = "SignIn"
   val CreateGameMsg: String = "CreateGame"
   val JoinLobbyMsg: String = "JoinLobby"
   val JoinGameMsg: String = "JoinGame"

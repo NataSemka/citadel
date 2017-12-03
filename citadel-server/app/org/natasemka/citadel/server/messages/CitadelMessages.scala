@@ -1,34 +1,39 @@
 package org.natasemka.citadel.server.messages
 
-import org.natasemka.citadel.model.{GameSession, Player}
+import org.natasemka.citadel.model.{GameSession, User}
+import play.api.libs.json.{Json, OFormat}
 
-trait CitadelMessage {
+trait PackagedMessage {
   val `type`: String
-  val body: CitadelMessageBody
+  val body: CitadelMessage
 }
 
-case class Credentials(playerId: String, password: String)
+trait CitadelMessage
 
-trait CitadelMessageBody
-
-trait ServerMessage extends CitadelMessageBody
+trait ServerMessage extends CitadelMessage
+case class Credentials(userId: String, password: String) extends ServerMessage
 case class Authenticate(login: String, password: String) extends ServerMessage
 case class Authenticated() extends ServerMessage
 case class NotAuthenticated(reason: String) extends ServerMessage
 
-case class JoinLobby(player: Player) extends ServerMessage
-case class LobbyInfo(players: Seq[Player], games: Seq[GameSession]) extends ServerMessage
+case class JoinLobby(user: User) extends ServerMessage
+case class LobbyInfo(users: Seq[User], games: Seq[GameSession]) extends ServerMessage
 
-case class CreateGame(player: Player, game: GameSession) extends ServerMessage
-case class JoinGame(player: Player, gameId: String) extends ServerMessage
-case class LeaveGame(player: Player, gameId: String) extends ServerMessage
+case class CreateGame(user: User, game: GameSession) extends ServerMessage
+case class JoinGame(user: User, gameId: String) extends ServerMessage
+case class LeaveGame(user: User, gameId: String) extends ServerMessage
 
 
 
-trait LobbyEvent extends CitadelMessageBody
-case class PlayerJoinedLobby(player: Player) extends LobbyEvent
-case class PlayerLeftLobby(player: Player) extends LobbyEvent
+trait LobbyEvent extends CitadelMessage
+case class UserJoinedLobby(user: User) extends LobbyEvent
+case class UserLeftLobby(user: User) extends LobbyEvent
 case class NewGameAvailable(game: GameSession) extends LobbyEvent
 case class GameNoLongerAvailable(game: GameSession) extends LobbyEvent
-case class ChatMessage(playerId: String, message: String, timestamp: Long) extends LobbyEvent
+case class ChatMessage(userId: String, message: String, timestamp: Long) extends LobbyEvent
 
+
+
+object CitadelMessages {
+  implicit val credentialsFormat: OFormat[Credentials] = Json.format
+}

@@ -7,6 +7,7 @@ import akka.event.LoggingReceive
 import akka.util.Timeout
 import com.google.inject.assistedinject.Assisted
 import org.natasemka.citadel.server.messages._
+import org.natasemka.citadel.server.messages.CitadelMessages._
 import org.natasemka.citadel.server.messages.JsonMessage._
 import org.natasemka.citadel.server.messages.JsonMessages._
 import play.api.libs.json._
@@ -28,7 +29,7 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
 
   override def receive: Receive = LoggingReceive {
     case msg: String => handleUserMessage(msg)
-    case msg: CitadelMessageBody => handleServerMessage(msg)
+    case msg: CitadelMessage => handleServerMessage(msg)
     case msg => handleInvalidMessage(msg)
   }
 
@@ -49,7 +50,7 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     (msgTypeLookup, msgBodyLookup) match {
       case (JsDefined(JsString(msgType)), JsDefined(msgBody)) =>
         msgType match {
-          case AuthenticateMsg => authenticate(msgBody)
+          case SignInMsg => signIn(msgBody)
           case JoinGameMsg => joinGame(msgBody)
           case JoinLobbyMsg => joinLobby(msgBody)
           case _ => out ! s"Unrecognized message type: $msgType"
@@ -58,11 +59,12 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
   }
 
-  def authenticate(msg: JsValue): Unit = {
-    Json.fromJson[Authenticate](msg) match {
-      case JsSuccess(authInfo: Authenticate, _) => manager ! authInfo
+  def signIn(msg: JsValue): Unit = {
+    logger.debug("signing in")
+    Json.fromJson[Credentials](msg) match {
+      case JsSuccess(credentials, _) => manager ! credentials
       case e: JsError =>
-        val notAuth: NotAuthenticated = NotAuthenticated(JsError.toJson(e).toString())
+        val notAuth: NotAuthenticated = NotAuthenticated(e.toString)
         val res = Json.stringify(Json.toJson(notAuth))
         out ! res
         //out ! "Not Authenticated"
@@ -91,14 +93,14 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
   }
 
-  def handleServerMessage(msg: CitadelMessageBody) = {
+  def handleServerMessage(msg: CitadelMessage): Unit = {
     msg match {
       case _: Authenticated => out ! """{"type":"Authenticated"}"""
       case _ => out ! """{"type":"UnrecognizedServerMessage"}"""
     }
   }
 
-  def handleInvalidMessage(msg: Any) = {
+  def handleInvalidMessage(msg: Any): Unit = {
     val logMsg = s"Received invalid message: $msg"
     logger.debug(logMsg)
     out ! InvalidMessage
