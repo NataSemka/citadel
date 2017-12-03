@@ -27,9 +27,13 @@ class CitadelManager @Inject()()
   // the entries to peer actors among all cluster nodes tagged with a specific role.
   val mediator: ActorRef = DistributedPubSub(system).mediator
 
+  var topicCounter = 2;
   def lobbyTopic = "Lobby"
 
-  var sessionCounter: Int = 0
+  //private var userCounter: Int = 0
+  private var userById: mutable.Map[String, User] = mutable.Map()
+
+  private var sessionCounter: Int = 0
   private val gameById = mutable.Map[Int, GameSession]()
   private val gameByUser = mutable.Map[String, Int]()
 
@@ -39,6 +43,7 @@ class CitadelManager @Inject()()
     case msg: CitadelMessage =>
       msg match {
         case credentials: Credentials => signIn(credentials)
+        case chatMsg: ChatMessage => chat(chatMsg)
         case _ => sender ! unrecognizedMsg
       }
     case _ => sender ! unrecognizedMsg
@@ -54,7 +59,16 @@ class CitadelManager @Inject()()
 
   def getUser(credentials: Credentials): Either[CitadelMessage, User] = {
     // TODO: player does not exist / invalid password
-    Right(User(credentials.userId, None))
+    val (userId, password) = (credentials.userId, credentials.password)
+    userById.get(userId) match {
+      case Some(user) =>
+        if (user.password == password) Right(user)
+        else Left(NotAuthenticated("Wrong password"))
+      case None =>
+        val user = User(userId, password, None)
+        userById += userId -> user
+        Right(user)
+    }
   }
 
   def loadUser(user: User): Unit = {
@@ -78,7 +92,10 @@ class CitadelManager @Inject()()
 
   def joinGame(sessionId: Int, user: User): Unit = ???
 
-
+  def chat(chatMsg: ChatMessage) = {
+    val withTimestamp = chatMsg.copy(timestamp = System.currentTimeMillis())
+    mediator ! Publish(chatMsg.chatId.toString, withTimestamp)
+  }
 
 
 

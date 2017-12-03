@@ -3,10 +3,7 @@ package org.natasemka.citadel.server.messages
 import org.natasemka.citadel.model.{GameSession, User}
 import play.api.libs.json.{Json, OFormat}
 
-trait PackagedMessage {
-  val `type`: String
-  val body: CitadelMessage
-}
+case class PackagedMessage(`type`: String, body: CitadelMessage)
 
 trait CitadelMessage
 
@@ -30,10 +27,16 @@ case class UserJoinedLobby(user: User) extends LobbyEvent
 case class UserLeftLobby(user: User) extends LobbyEvent
 case class NewGameAvailable(game: GameSession) extends LobbyEvent
 case class GameNoLongerAvailable(game: GameSession) extends LobbyEvent
-case class ChatMessage(userId: String, message: String, timestamp: Long) extends LobbyEvent
+
+case class ChatMessage(chatId: Integer, userId: String, message: String, timestamp: Long) extends LobbyEvent
 
 
 
 object CitadelMessages {
   implicit val credentialsFormat: OFormat[Credentials] = Json.format
+  implicit val userJoinedLobbyFormat: OFormat[UserJoinedLobby] = Json.format[UserJoinedLobby]
+
+  implicit val packagedMessageFormat: OFormat[PackagedMessage] = Json.format[PackagedMessage]
+  implicit def packagedUserJoinedLobby(msg: UserJoinedLobby): PackagedMessage =
+    PackagedMessage("UserJoinedLobby", msg)
 }

@@ -53,6 +53,7 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
           case SignInMsg => signIn(msgBody)
           case JoinGameMsg => joinGame(msgBody)
           case JoinLobbyMsg => joinLobby(msgBody)
+          case ChatMsg => chat(msgBody)
           case _ => out ! s"Unrecognized message type: $msgType"
         }
       case _ => out ! s"""{"type": "Rejected", "reason":"invalid message type: $msg"}"""
@@ -82,6 +83,19 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
   }
 
+  def chat(msg: JsValue): Unit = {
+    logger.debug("chatting")
+    Json.fromJson[ChatMessage](msg) match {
+      case JsSuccess(chatMsg, _) => chat(chatMsg)
+      case e: JsError =>
+        out ! rejected(e.toString)
+    }
+  }
+
+  def chat(chatMsg: ChatMessage): Unit = {
+    manager ! chatMsg
+  }
+
   def joinGame(msg: JsValue): Either[_, String] = {
     val sessionIdLookup = msg \ "sessionId"
     sessionIdLookup match {
@@ -96,6 +110,7 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
   def handleServerMessage(msg: CitadelMessage): Unit = {
     msg match {
       case _: Authenticated => out ! """{"type":"Authenticated"}"""
+      case msg: UserJoinedLobby => out ! Json.stringify(Json.toJson(msg))
       case _ => out ! """{"type":"UnrecognizedServerMessage"}"""
     }
   }
