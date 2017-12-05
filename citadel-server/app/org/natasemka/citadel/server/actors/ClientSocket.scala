@@ -52,11 +52,10 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
         msgType match {
           case SignInMsg => signIn(msgBody)
           case JoinGameMsg => joinGame(msgBody)
-          case JoinLobbyMsg => joinLobby(msgBody)
           case ChatMsg => chat(msgBody)
-          case _ => out ! s"Unrecognized message type: $msgType"
+          case _ => out ! rejected(s"Unrecognized message type: $msgType")
         }
-      case _ => out ! s"""{"type": "Rejected", "reason":"invalid message type: $msg"}"""
+      case _ => out ! rejected(s"Invalid message format: $msg")
     }
   }
 
@@ -68,18 +67,6 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
         val notAuth: NotAuthenticated = NotAuthenticated(e.toString)
         val res = Json.stringify(Json.toJson(notAuth))
         out ! res
-        //out ! "Not Authenticated"
-    }
-  }
-
-  def joinLobby(msg: JsValue): Either[Exception, String] = {
-    val lobbyIdLookup = msg \ "lobbyId"
-    lobbyIdLookup match {
-      case JsDefined(JsString(lobbyId)) =>
-        //mediator ! Subscribe(lobbyId, self)
-        this.lobbyId = Some(lobbyId)
-        Right(lobbyId)
-      case _ => Left(illegal(s"Unexpected lobby ID value: $lobbyIdLookup"))
     }
   }
 
@@ -100,7 +87,6 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     val sessionIdLookup = msg \ "sessionId"
     sessionIdLookup match {
       case JsDefined(JsString(sessionId)) =>
-        //mediator ! Subscribe(sessionId, self)
         this.sessionId = Some(sessionId)
         Right(sessionId)
       case _ => Left(illegal(s"Unexpected session ID value: $sessionIdLookup"))
@@ -109,16 +95,36 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
 
   def handleServerMessage(msg: CitadelMessage): Unit = {
     msg match {
-      case _: Authenticated => out ! """{"type":"Authenticated"}"""
-      case msg: UserJoinedLobby => out ! Json.stringify(Json.toJson(msg))
-      case _ => out ! """{"type":"UnrecognizedServerMessage"}"""
+      case msg: Authenticated =>
+        val packaged = PackagedMessage("Authenticated", msg)
+        val json = Json.toJson(packaged)
+        out ! Json.stringify(json)
+      case msg: UserJoinedLobby =>
+        val packaged = PackagedMessage("UserJoinedLobby", msg)
+        val json = Json.toJson(packaged)
+        out ! Json.stringify(json)
+      case msg: LobbyInfo =>
+        val packaged = PackagedMessage("LobbyInfo", msg)
+        val json = Json.toJson(packaged)
+        out ! Json.stringify(json)
+      case msg: ChatMessage => //emitPackaged("Chat", msg)
+        val packaged = PackagedMessage("Chat", msg)
+        val json = Json.toJson(packaged)
+        out ! Json.stringify(json)
+      case _ => logger.warn(s"Unrecognized server message: $msg")
     }
+  }
+
+  def emitPackaged[T <: CitadelMessage](title: String, msg: T): Unit = {
+//    val packaged = PackagedMessage(title, msg)
+//    val json = Json.toJson(packaged)
+//    out ! Json.stringify(json)
   }
 
   def handleInvalidMessage(msg: Any): Unit = {
     val logMsg = s"Received invalid message: $msg"
     logger.debug(logMsg)
-    out ! InvalidMessage
+    out ! rejected(logMsg)
   }
 }
 

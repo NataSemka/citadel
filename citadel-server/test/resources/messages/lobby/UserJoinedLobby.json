@@ -1,0 +1,9 @@
+{
+  "type": "UserJoinedLobby",
+  "body": {
+    "user": {
+      "id": "Constantine",
+      "avatar": "sherman.png"
+    }
+  }
+}

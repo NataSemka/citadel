@@ -52,7 +52,9 @@ class CitadelManager @Inject()()
   def signIn(credentials: Credentials): Unit = {
     logger.debug(s"Sign in request from ${credentials.userId}")
     getUser(credentials) match {
-      case Right(user) => loadUser(user)
+      case Right(user) =>
+        sender ! Authenticated(user)
+        loadUser(user)
       case Left(response) => sender ! response
     }
   }
@@ -88,12 +90,18 @@ class CitadelManager @Inject()()
     val topic = lobbyTopic
     mediator ! Subscribe(topic, sender)
     mediator ! Publish(topic, UserJoinedLobby(user))
+    sender ! LobbyInfo(usersInLobby, Seq.empty)
+  }
+
+  def usersInLobby: Seq[User] = {
+    val userIds = userById.keySet -- gameByUser.keySet
+    userById.filterKeys(userIds.contains).values.toSeq
   }
 
   def joinGame(sessionId: Int, user: User): Unit = ???
 
   def chat(chatMsg: ChatMessage) = {
-    val withTimestamp = chatMsg.copy(timestamp = System.currentTimeMillis())
+    val withTimestamp = chatMsg.copy(timestamp = Some(System.currentTimeMillis()))
     mediator ! Publish(chatMsg.chatId.toString, withTimestamp)
   }
 

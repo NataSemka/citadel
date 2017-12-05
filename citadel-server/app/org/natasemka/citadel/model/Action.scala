@@ -1,5 +1,3 @@
 package org.natasemka.citadel.model
 
-trait Action {
-  
-}
+case class Action(target: Character)
