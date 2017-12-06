@@ -93,33 +93,8 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
   }
 
-  def handleServerMessage(msg: CitadelMessage): Unit = {
-    msg match {
-      case msg: Authenticated =>
-        val packaged = PackagedMessage("Authenticated", msg)
-        val json = Json.toJson(packaged)
-        out ! Json.stringify(json)
-      case msg: UserJoinedLobby =>
-        val packaged = PackagedMessage("UserJoinedLobby", msg)
-        val json = Json.toJson(packaged)
-        out ! Json.stringify(json)
-      case msg: LobbyInfo =>
-        val packaged = PackagedMessage("LobbyInfo", msg)
-        val json = Json.toJson(packaged)
-        out ! Json.stringify(json)
-      case msg: ChatMessage => emitPackaged("Chat", msg)
-//        val packaged = PackagedMessage("Chat", msg)
-//        val json = Json.toJson(packaged)
-//        out ! Json.stringify(json)
-      case _ => logger.warn(s"Unrecognized server message: $msg")
-    }
-  }
-
-  def emitPackaged(title: String, msg: CitadelMessage): Unit = {
-    val packaged = PackagedMessage(title, msg)
-    val json = Json.toJson(packaged)
-    out ! Json.stringify(json)
-  }
+  def handleServerMessage(msg: CitadelMessage): Unit =
+    out ! msg.toJson
 
   def handleInvalidMessage(msg: Any): Unit = {
     val logMsg = s"Received invalid message: $msg"
