@@ -7,9 +7,9 @@ import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator._
 import akka.util.Timeout
 import org.natasemka.citadel.model.{GameSession, User}
+import org.natasemka.citadel.server.messages.JsonMessages._
 import org.natasemka.citadel.server.messages._
 import play.api.libs.concurrent.InjectedActorSupport
-import play.api.libs.json.JsValue
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
@@ -27,11 +27,12 @@ class CitadelManager @Inject()()
   // the entries to peer actors among all cluster nodes tagged with a specific role.
   val mediator: ActorRef = DistributedPubSub(system).mediator
 
-  var topicCounter = 2;
+  var topicCounter = 2
   def lobbyTopic = "Lobby"
 
   //private var userCounter: Int = 0
-  private var userById: mutable.Map[String, User] = mutable.Map()
+  private val userById: mutable.Map[String, User] = mutable.Map()
+  private val passwordByUserId: mutable.Map[String, String] = mutable.Map()
 
   private var sessionCounter: Int = 0
   private val gameById = mutable.Map[Int, GameSession]()
@@ -60,16 +61,23 @@ class CitadelManager @Inject()()
   }
 
   def getUser(credentials: Credentials): Either[CitadelMessage, User] = {
-    // TODO: player does not exist / invalid password
     val (userId, password) = (credentials.userId, credentials.password)
-    userById.get(userId) match {
-      case Some(user) =>
-        if (user.password == password) Right(user)
-        else Left(NotAuthenticated("Wrong password"))
-      case None =>
-        val user = User(userId, password, None)
-        userById += userId -> user
-        Right(user)
+
+    def createUser: Either[CitadelMessage, User] = {
+      passwordByUserId.put(userId, password)
+      val user = User(userId, None)
+      userById.put(userId, user)
+      Right(user)
+    }
+
+    passwordByUserId.get(userId) match {
+      case Some(expectedPass) =>
+        if (expectedPass == password) userById.get(userId) match {
+          case Some(user) => Right(user)
+          case None => createUser
+        }
+        else Left(Rejected("Not Authenticated", SignInMsg, "Wrong password"))
+      case None => createUser
     }
   }
 
@@ -100,13 +108,9 @@ class CitadelManager @Inject()()
 
   def joinGame(sessionId: Int, user: User): Unit = ???
 
-  def chat(chatMsg: ChatMessage) = {
+  def chat(chatMsg: ChatMessage): Unit = {
     val withTimestamp = chatMsg.copy(timestamp = Some(System.currentTimeMillis()))
     mediator ! Publish(chatMsg.chatId.toString, withTimestamp)
   }
 
-
-
-  private def illegal(errorMsg: String): Either[Exception, JsValue] =
-    Left(new IllegalArgumentException(errorMsg))
 }

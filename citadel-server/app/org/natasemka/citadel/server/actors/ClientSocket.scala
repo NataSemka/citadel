@@ -6,10 +6,8 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.event.LoggingReceive
 import akka.util.Timeout
 import com.google.inject.assistedinject.Assisted
-import org.natasemka.citadel.server.messages._
 import org.natasemka.citadel.server.messages.CitadelMessages._
-import org.natasemka.citadel.server.messages.JsonMessage._
-import org.natasemka.citadel.server.messages.JsonMessages._
+import org.natasemka.citadel.server.messages._
 import play.api.libs.json._
 
 import scala.concurrent.duration._
@@ -21,86 +19,60 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
 {
   val logger = play.api.Logger(getClass)
   implicit val timeout: Timeout = Timeout(50.millis)
-  //implicit val node = Cluster(system)
-
-
-  private var lobbyId: Option[String] = None
-  private var sessionId: Option[String] = None
 
   override def receive: Receive = LoggingReceive {
-    case msg: String => handleUserMessage(msg)
-    case msg: CitadelMessage => handleServerMessage(msg)
-    case msg => handleInvalidMessage(msg)
+    case msg: String => handleUserRequest(msg)
+    case msg: CitadelMessage => handleServerEvent(msg)
+    case msg => handleInvalidRequest(msg)
   }
 
-  def handleUserMessage(msg: String): Unit = {
+  def handleUserRequest(msg: String): Unit = {
     Try(Json.parse(msg)) match {
-      case Success(json) => handleUserMessage(json)
-      case Failure(e) => out ! e.getMessage
+      case Success(json) => handleUserRequest(json)
+      case Failure(e) => rejectInvalidJson("Undefined", e.getMessage)
     }
   }
 
-  def handleUserMessage(msg: JsValue): Unit = {
+  def handleUserRequest(msg: JsValue): Unit = {
     val logMsg = s"ClientSocket received a JSON msg: $msg"
     logger.debug(logMsg)
-    //out ! logMsg
 
-    val msgTypeLookup = msg \ MsgType
-    val msgBodyLookup = msg \ Body
-    (msgTypeLookup, msgBodyLookup) match {
-      case (JsDefined(JsString(msgType)), JsDefined(msgBody)) =>
-        msgType match {
-          case SignInMsg => signIn(msgBody)
-          case JoinGameMsg => joinGame(msgBody)
-          case ChatMsg => chat(msgBody)
-          case _ => out ! rejected(s"Unrecognized message type: $msgType")
-        }
-      case _ => out ! rejected(s"Invalid message format: $msg")
+    val titleLookup = msg \ "type" match {
+      case JsDefined(JsString(title)) => title
+      case JsDefined(notString) => notString.toString
+      case _ => "Undefined"
+    }
+
+    Json.fromJson[PackagedMessage[CitadelMessage]](msg) match {
+      case JsSuccess(PackagedMessage(title, body), _) => handleUserRequest(title, body)
+      case JsError(e) =>
+        val errs = e.flatMap(_._2).map(_.message)
+        val errmsg =
+          if (errs.lengthCompare(1) == 0) errs.head
+          else errs.map(err => s"[$err]").mkString("; ")
+        rejectInvalidJson(titleLookup, errmsg)
     }
   }
 
-  def signIn(msg: JsValue): Unit = {
-    logger.debug("signing in")
-    Json.fromJson[Credentials](msg) match {
-      case JsSuccess(credentials, _) => manager ! credentials
-      case e: JsError =>
-        val notAuth: NotAuthenticated = NotAuthenticated(e.toString)
-        val res = Json.stringify(Json.toJson(notAuth))
-        out ! res
-    }
+  def handleUserRequest(title: String, msg: CitadelMessage): Unit = msg match {
+    case cm => manager ! cm
+    // can include extra processing based on title / msg type
   }
 
-  def chat(msg: JsValue): Unit = {
-    logger.debug("chatting")
-    Json.fromJson[ChatMessage](msg) match {
-      case JsSuccess(chatMsg, _) => chat(chatMsg)
-      case e: JsError =>
-        out ! rejected(e.toString)
-    }
-  }
+  def handleServerEvent(msg: CitadelMessage): Unit =
+    out ! msg.packageJson
 
-  def chat(chatMsg: ChatMessage): Unit = {
-    manager ! chatMsg
-  }
+  def handleInvalidRequest(msg: Any): Unit =
+    rejectInvalidJson("Undefined", s"Invalid message format: $msg")
 
-  def joinGame(msg: JsValue): Either[_, String] = {
-    val sessionIdLookup = msg \ "sessionId"
-    sessionIdLookup match {
-      case JsDefined(JsString(sessionId)) =>
-        this.sessionId = Some(sessionId)
-        Right(sessionId)
-      case _ => Left(illegal(s"Unexpected session ID value: $sessionIdLookup"))
-    }
-  }
+  def reject(title: String, request: String, reason: String): Unit =
+    out ! Rejected(title, request, reason).packageJson
 
-  def handleServerMessage(msg: CitadelMessage): Unit =
-    out ! msg.toJson
+  def rejectInvalidJson(request: String, reason: String): Unit =
+    reject("Invalid JSON", request, reason)
 
-  def handleInvalidMessage(msg: Any): Unit = {
-    val logMsg = s"Received invalid message: $msg"
-    logger.debug(logMsg)
-    out ! rejected(logMsg)
-  }
+  def rejectInvalidJson(request: String): Unit =
+    reject("Invalid JSON", request, "Received a message that is not a valid JSON")
 }
 
 object ClientSocket {
@@ -110,6 +82,4 @@ object ClientSocket {
 
   def props(out: ActorRef, manager: ActorRef) =
     Props(new ClientSocket(out, manager))
-
-  def illegal(errorMsg: String): IllegalArgumentException = new IllegalArgumentException(errorMsg)
 }

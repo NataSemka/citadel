@@ -27,15 +27,21 @@ object JsonMessage {
 }
 
 object JsonMessages {
+  val ServerErrorMsg: String = "ServerError"
+  val RejectedMsg: String = "Rejected"
+
   val SignInMsg: String = "SignIn"
   val AuthenticateMsg: String = "Authenticate"
   val AuthenticatedMsg: String = "Authenticated"
-  val CreateGameMsg: String = "CreateGame"
-  val JoinLobbyMsg: String = "JoinLobby"
-  val JoinGameMsg: String = "JoinGame"
+  val notAuthenticatedMsg: String = "NotAuthenticated"
 
   val LobbyInfoMsg: String = "LobbyInfo"
   val UserJoinedLobbyMsg: String = "UserJoinedLobby";
+  val UserLeftLobby: String = "UserLeftLobby"
+
+  val JoinLobbyMsg: String = "JoinLobby"
+  val CreateGameMsg: String = "CreateGame"
+  val JoinGameMsg: String = "JoinGame"
 
   val ChatMsg: String = "Chat"
 
