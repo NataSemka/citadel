@@ -1,0 +1,7 @@
+{
+  "type": "SignIn",
+  "body": {
+    "userId": "natasemka",
+    "password": "passwordhash"
+  }
+}

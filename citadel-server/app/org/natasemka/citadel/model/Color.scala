@@ -1,7 +1,7 @@
 package org.natasemka.citadel.model
 
 sealed trait Color {
-  val id: String
+  def id: String
 }
 
 case object Red extends Color { val id = "Red" }

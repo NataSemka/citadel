@@ -1,5 +1,3 @@
 package org.natasemka.citadel.model
 
-trait QuarterProperty {
-  
-}
+case class QuarterProperty(cost: Int)

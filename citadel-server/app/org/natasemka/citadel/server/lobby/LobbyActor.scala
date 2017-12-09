@@ -23,7 +23,7 @@ class LobbyActor extends Actor with ActorLogging {
   def signIn(credentials: Credentials): SignInResult = {
     val authResult = authenticate(credentials)
     val result = authResult match {
-      case LobbyAuthenticated() => loadPlayer(credentials.playerId)
+      case LobbyAuthenticated() => loadPlayer(credentials.userId)
       case _ => LobbyNotAuthenticated(authResult.msg)
     }
     result

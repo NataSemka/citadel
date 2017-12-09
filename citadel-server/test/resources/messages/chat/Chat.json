@@ -1,0 +1,9 @@
+{
+  "type": "Chat",
+  "body": {
+    "chatId": "Lobby",
+    "userId": "Constantine",
+    "message": "Hello, world!",
+    "timestamp": 1000000000
+  }
+}

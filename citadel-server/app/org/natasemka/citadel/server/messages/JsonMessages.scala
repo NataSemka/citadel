@@ -27,12 +27,26 @@ object JsonMessage {
 }
 
 object JsonMessages {
+  val ServerErrorMsg: String = "ServerError"
+  val RejectedMsg: String = "Rejected"
+
+  val SignInMsg: String = "SignIn"
   val AuthenticateMsg: String = "Authenticate"
-  val CreateGameMsg: String = "CreateGame"
+  val AuthenticatedMsg: String = "Authenticated"
+  val notAuthenticatedMsg: String = "NotAuthenticated"
+
+  val LobbyInfoMsg: String = "LobbyInfo"
+  val UserJoinedLobbyMsg: String = "UserJoinedLobby";
+  val UserLeftLobby: String = "UserLeftLobby"
+
   val JoinLobbyMsg: String = "JoinLobby"
+  val CreateGameMsg: String = "CreateGame"
   val JoinGameMsg: String = "JoinGame"
 
+  val ChatMsg: String = "Chat"
+
   val InvalidMessage: String = """{"type":"InvalidMessage","body":{"descr":"Not a proper JSON message"}}"""
+  def rejected(reason: String) = s"""{"type":"Rejected", "reason":"$reason"}"""
 
   implicit val authenticateReads = Json.reads[Authenticate]
   implicit val authenticateFormat = Json.format[Authenticate]
