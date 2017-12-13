@@ -1,7 +1,7 @@
 package org.natasemka.citadel.model
 
 case class Chat(
-               id: Int,
+               id: String,
                // lobby / private / game
                `type`: String,
                name: String

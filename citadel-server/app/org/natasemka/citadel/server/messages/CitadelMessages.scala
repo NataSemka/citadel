@@ -6,32 +6,60 @@ import org.natasemka.citadel.server.messages.JsonMessages._
 import play.api.libs.json._
 
 case class PackagedMessage[+T <: CitadelMessage](`type`: String, body: T) {
-  import CitadelMessages.packagedMessageFmt
+  import CitadelMessages._
   def packageJson: String = Json.stringify(Json.toJson(this))
 }
 
-trait CitadelMessage
+trait CitadelMessage {
+  def requestTitle: String = this match {
+    case _: Credentials => SignInMsg
+    case _: ServerError => ServerErrorMsg
+    case _: Rejected => RejectedMsg
+
+    case _: Authenticated => AuthenticatedMsg
+    case _: LobbyInfo => LobbyInfoMsg
+    case _: UserJoinedLobby => UserJoinedLobbyMsg
+
+    case _: ChatMessage => ChatMsg
+
+    case _: CreateGame => CreateGameMsg
+    case _: JoinGame => JoinGameMsg
+    case _: LeaveGame => LeaveGameMsg
+    case _: UserJoinedGame => UserJoinedGameMsg
+    case _: UserLeftGame => UserLeftGameMsg
+
+
+    case _ => "Undefined"
+  }
+}
 
 trait UserMessage extends CitadelMessage
 case class Credentials(userId: String, password: String) extends UserMessage
-case class Authenticate(login: String, password: String) extends UserMessage
+//case class Authenticate(login: String, password: String) extends UserMessage
 
 trait ServerMessage extends CitadelMessage
 case class Authenticated(user: User) extends ServerMessage
 case class NotAuthenticated(reason: String) extends ServerMessage
 
-case class ServerError(name: String, reason: String) extends ServerMessage
-case class Rejected(title: String, request: String, reason: String) extends ServerMessage
+case class ServerError(name: String, reasons: Seq[String]) extends ServerMessage
+case class Rejected(title: String, request: String, reasons: Seq[String]) extends ServerMessage
+case object Rejected {
+  def apply(title: String, request: String, reason: String): Rejected =
+    Rejected(title, request, Seq(reason))
+}
 
 // lobby messages
 case class JoinLobby(user: User) extends ServerMessage
 case class LobbyInfo(users: Seq[User], games: Seq[GameSession]) extends ServerMessage
 
 // game session messages
-case class CreateGame(user: User, game: GameSession) extends ServerMessage
-case class JoinGame(user: User, gameId: String) extends ServerMessage
+trait UserIdMessage extends UserMessage {
+  def userId: String
+}
+case class CreateGame(userId: String, game: GameSession) extends UserIdMessage
+case class JoinGame(userId: String, gameId: String) extends UserIdMessage
+case class LeaveGame(userId: String) extends UserIdMessage
 case class UserJoinedGame(user: User, gameId: String) extends ServerMessage
-case class LeaveGame(user: User, gameId: String) extends ServerMessage
 case class UserLeftGame(user: User, gameId: String) extends ServerMessage
 
 trait LobbyEvent extends CitadelMessage
@@ -41,11 +69,11 @@ case class NewGameAvailable(game: GameSession) extends LobbyEvent
 case class GameNoLongerAvailable(game: GameSession) extends LobbyEvent
 
 trait ChatEvent extends CitadelMessage
-
-case class ChatMessage(chatId: String, userId: String, message: String, timestamp: Option[Long])
-  extends ChatEvent with UserMessage
+case class ChatMessage(userId: String, chatId: String, message: String, timestamp: Option[Long])
+  extends ChatEvent with UserIdMessage
 case class SubToChat(chatId: String, client: ActorRef)
 case class UnsubFromChat(chatId: String, client: ActorRef)
+
 
 
 object CitadelMessages {
@@ -81,6 +109,7 @@ object CitadelMessages {
 
   implicit val quarterPropFmt: OFormat[QuarterProperty] = Json.format[QuarterProperty]
   implicit val quarterFmt: OFormat[Quarter] = Json.format[Quarter]
+  // TODO recursive dependency between character and action
   implicit val actionFmt: OFormat[Action] = Json.format[Action]
   implicit val charFmt: OFormat[Character] = Json.format[Character]
   implicit val rulesFmt: OFormat[Rules] = Json.format[Rules]
@@ -124,9 +153,6 @@ object CitadelMessages {
             msgType match {
               case SignInMsg => packageBody(credentialsFormat)
               case ChatMsg => packageBody(chatMessageFmt)
-              //packageBody(fromJson[Credentials](bodyJson))
-              //case JoinGameMsg => packageBody(fromJson[JoinGame](bodyJson))
-              //              case ChatMsg => packageBody(fromJson[ChatMessage](bodyJson))
               case _ => JsError(s"Unrecognized message type: $msgType")
             }
           case _ => JsError("Unrecognized message format")
@@ -138,7 +164,6 @@ object CitadelMessages {
         (implicit msgType: String, bodyJson: JsValue)
       : JsResult[PackagedMessage[T]] =
         Json.fromJson(bodyJson)(reads) match {
-          //case JsSuccess(body, _) => JsSuccess(PackagedMessage(msgType, body))
           case JsSuccess(body, _) => JsSuccess(PackagedMessage(msgType, body))
           case error: JsError => error
 
@@ -146,23 +171,10 @@ object CitadelMessages {
 
     }
 
-  implicit def toPackagedMessage[T <: CitadelMessage](msg: T): PackagedMessage[T] = {
-    def pack(msgType: String)
-            (implicit body: T): PackagedMessage[T] =
-      PackagedMessage(msgType, body)
+  implicit def toPackagedMessage[T <: CitadelMessage](msg: T): PackagedMessage[T] =
+      PackagedMessage(msg.requestTitle, msg)
 
-    implicit val body: T = msg
-    msg match {
-      case _: ServerError => pack(ServerErrorMsg)
-      case _: Rejected => pack(RejectedMsg)
-      case _: Authenticate => pack(AuthenticateMsg)
-      case _: Authenticated => pack(AuthenticatedMsg)
-      //case _: NotAuthenticated => pack(NotAuthenticatedMsg)
-      case _: LobbyInfo => pack(LobbyInfoMsg)
-      case _: UserJoinedLobby => pack(UserJoinedLobbyMsg)
-      case _: ChatMessage => pack(ChatMsg)
-      //case _ => Rejected
-    }
-  }
+  implicit def parseJsError(jsError: JsError): Seq[String] =
+    jsError.errors.flatMap(_._2).flatMap(_.messages)
 
 }
