@@ -1,9 +1,13 @@
 package org.natasemka.citadel.model
 
 case class GameSession (
-    id: Long,
+    id: Option[Long],
     playerCapacity: Int,
     players: Seq[Player],
     round: Round,
-    rules: Rules
-    )
+    rules: RuleSet)
+extends WithOptId[Long, GameSession]
+{
+    override def withId(id: Long): GameSession =
+        this.copy(id = Some(id))
+}

@@ -28,14 +28,12 @@ trait CitadelMessage {
     case _: UserJoinedGame => UserJoinedGameMsg
     case _: UserLeftGame => UserLeftGameMsg
 
-
     case _ => "Undefined"
   }
 }
 
 trait UserMessage extends CitadelMessage
 case class Credentials(userId: String, password: String) extends UserMessage
-//case class Authenticate(login: String, password: String) extends UserMessage
 
 trait ServerMessage extends CitadelMessage
 case class Authenticated(user: User) extends ServerMessage
@@ -56,7 +54,7 @@ case class LobbyInfo(users: Seq[User], games: Seq[GameSession]) extends ServerMe
 trait UserIdMessage extends UserMessage {
   def userId: String
 }
-case class CreateGame(userId: String, game: GameSession) extends UserIdMessage
+case class CreateGame(userId: String, name: Option[String], rules: Option[RuleSet]) extends UserIdMessage
 case class JoinGame(userId: String, gameId: String) extends UserIdMessage
 case class LeaveGame(userId: String) extends UserIdMessage
 case class UserJoinedGame(user: User, gameId: String) extends ServerMessage
@@ -109,10 +107,9 @@ object CitadelMessages {
 
   implicit val quarterPropFmt: OFormat[QuarterProperty] = Json.format[QuarterProperty]
   implicit val quarterFmt: OFormat[Quarter] = Json.format[Quarter]
-  // TODO recursive dependency between character and action
   implicit val actionFmt: OFormat[Action] = Json.format[Action]
   implicit val charFmt: OFormat[Character] = Json.format[Character]
-  implicit val rulesFmt: OFormat[Rules] = Json.format[Rules]
+  implicit val rulesFmt: OFormat[RuleSet] = Json.format[RuleSet]
   implicit val playerFmt: OFormat[Player] = Json.format[Player]
 
   implicit val charDeckFmt: OFormat[CharacterDeck] = Json.format[CharacterDeck]

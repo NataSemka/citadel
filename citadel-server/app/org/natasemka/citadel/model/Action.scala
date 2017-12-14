@@ -1,3 +1,3 @@
 package org.natasemka.citadel.model
 
-case class Action(target: Character)
+case class Action(target: String)

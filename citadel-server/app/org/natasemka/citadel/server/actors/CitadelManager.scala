@@ -6,7 +6,7 @@ import akka.actor._
 import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.pubsub.DistributedPubSubMediator._
 import akka.util.Timeout
-import org.natasemka.citadel.model.{GameSession, User}
+import org.natasemka.citadel.model._
 import org.natasemka.citadel.server.messages.JsonMessages._
 import org.natasemka.citadel.server.messages._
 import play.api.libs.concurrent.InjectedActorSupport
@@ -45,6 +45,7 @@ class CitadelManager @Inject()()
       msg match {
         case credentials: Credentials => signIn(credentials)
         case chatMsg: ChatMessage => chat(chatMsg)
+        case createGameCmd: CreateGame => createGame(createGameCmd)
         case _ => sender ! unrecognizedMsg
       }
     case _ => sender ! unrecognizedMsg
@@ -105,6 +106,15 @@ class CitadelManager @Inject()()
     val userIds = userById.keySet -- gameByUser.keySet
     userById.filterKeys(userIds.contains).values.toSeq
   }
+
+  def createGame(cmd: CreateGame): GameSession = ???
+//  {
+//    val stadardRules = RuleSet("Standard Rules", Empty)
+//    val rules = cmd.rules.getOrElse(stadardRules)
+//    val gameName = cmd.name.getOrElse(s"${cmd.userId}'s ${rules.name} game")
+//    val round = Round(Empty,)
+//    GameSession(None, 0, Empty, round, rules)
+//  }
 
   def joinGame(sessionId: Int, user: User): Unit = ???
 
