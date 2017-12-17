@@ -9,15 +9,16 @@ import akka.util.Timeout
 import org.natasemka.citadel.model._
 import org.natasemka.citadel.server.messages.JsonMessages._
 import org.natasemka.citadel.server.messages._
+import org.natasemka.citadel.server.repository.api.Repositories
 import play.api.libs.concurrent.InjectedActorSupport
 
-import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 class CitadelManager @Inject()()
                      (implicit val system: ActorSystem,
-                      implicit val ec: ExecutionContext)
+                      implicit val ec: ExecutionContext,
+                      implicit val repositories: Repositories)
   extends Actor with InjectedActorSupport with ActorLogging
 {
   implicit val timeout: Timeout = Timeout(2.seconds)
@@ -25,20 +26,18 @@ class CitadelManager @Inject()()
 
   // the actor that manages a registry of actors and replicates
   // the entries to peer actors among all cluster nodes tagged with a specific role.
-  val mediator: ActorRef = DistributedPubSub(system).mediator
+  private val mediator: ActorRef = DistributedPubSub(system).mediator
 
-  var topicCounter = 2
-  def lobbyTopic = "Lobby"
+  private val users = repositories.users
+  private val games = repositories.games
+  private val chats = repositories.chats
 
-  //private var userCounter: Int = 0
-  private val userById: mutable.Map[String, User] = mutable.Map()
-  private val passwordByUserId: mutable.Map[String, String] = mutable.Map()
+  //var topicCounter = 2
+  var lobbyId = "0"
+  //def lobbyTopic = "Lobby"
 
-  private var sessionCounter: Int = 0
-  private val gameById = mutable.Map[Int, GameSession]()
-  private val gameByUser = mutable.Map[String, Int]()
-
-  private val unrecognizedMsg = """{"type":"UnrecognizedServerMessage"}"""
+  def unrecognizedCommand(cmd: Any) =
+    logger.error(s"Received an unrecognized server command: $cmd")
 
   override def receive: Receive = {
     case msg: CitadelMessage =>
@@ -46,9 +45,9 @@ class CitadelManager @Inject()()
         case credentials: Credentials => signIn(credentials)
         case chatMsg: ChatMessage => chat(chatMsg)
         case createGameCmd: CreateGame => createGame(createGameCmd)
-        case _ => sender ! unrecognizedMsg
+        case _ => unrecognizedCommand(msg)
       }
-    case _ => sender ! unrecognizedMsg
+    case _ => unrecognizedCommand(_)
   }
 
   def signIn(credentials: Credentials): Unit = {
@@ -63,44 +62,26 @@ class CitadelManager @Inject()()
 
   def getUser(credentials: Credentials): Either[CitadelMessage, User] = {
     val (userId, password) = (credentials.userId, credentials.password)
-
-    def createUser: Either[CitadelMessage, User] = {
-      passwordByUserId.put(userId, password)
-      val user = User(userId, None)
-      userById.put(userId, user)
-      Right(user)
-    }
-
-    passwordByUserId.get(userId) match {
-      case Some(expectedPass) =>
-        if (expectedPass == password) userById.get(userId) match {
-          case Some(user) => Right(user)
-          case None => createUser
-        }
-        else Left(Rejected("Not Authenticated", SignInMsg, "Wrong password"))
-      case None => createUser
+    users.signIn(userId, password) match {
+      case Right(_) => _
+      case Left(e) => Left(Rejected("Not Authenticated", SignInMsg, e.getMessage))
     }
   }
 
   def loadUser(user: User): Unit = {
-    isInGame(user) match {
-      case Some(sessionId) => joinGame(sessionId, user)
+    games.ofUser(user.id) match {
+      case Some(session) => sender ! session
       case None => joinLobby(user)
     }
   }
 
-  def isInGame(user: User): Option[Int] = isInGame(user.id)
-
-  def isInGame(userId: String): Option[Int] = {
-    gameByUser.get(userId)
-  }
-
-  def joinLobby(user: User): Unit = {
-    val topic = lobbyTopic
-    mediator ! Subscribe(topic, sender)
-    mediator ! Publish(topic, UserJoinedLobby(user))
-    sender ! LobbyInfo(usersInLobby, Seq.empty)
-  }
+//  def joinLobby(user: User): Unit = {
+//    val topic = lobbyTopic
+//    mediator ! Subscribe(lobbyId, sender)
+//    mediator ! Publish(topic, UserJoinedLobby(user))
+//    sender ! LobbyInfo(usersInLobby, Seq.empty)
+//  }
+  def joinChat(user)
 
   def usersInLobby: Seq[User] = {
     val userIds = userById.keySet -- gameByUser.keySet
