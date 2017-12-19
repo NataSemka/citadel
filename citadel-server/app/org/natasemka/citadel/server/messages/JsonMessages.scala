@@ -37,21 +37,23 @@ object JsonMessages {
 
   val JoinLobbyMsg: String = "JoinLobby"
   val LobbyInfoMsg: String = "LobbyInfo"
-  val UserJoinedLobbyMsg: String = "UserJoinedLobby"
   val UserLeftLobby: String = "UserLeftLobby"
+
+  val ChatMsg: String = "Chat"
+  val ChatInfoMsg: String = "ChatInfo"
+  val UserJoinedChatMsg: String = "UserJoinedChat"
+  val UserLeftChatMsg: String = "UserLeftChat"
+  val AvailableChatsMsg: String = "AvailableChats"
+  val NewChatAvailableMsg: String = "NewChatAvailable"
+  val ChatNoLongerAvailableMsg: String = "ChatNoLongerAvailable"
 
   val CreateGameMsg: String = "CreateGame"
   val JoinGameMsg: String = "JoinGame"
   val LeaveGameMsg: String = "LeaveGame"
   val UserJoinedGameMsg: String = "UserJoinedGame"
   val UserLeftGameMsg: String = "UserLeftGame"
-
-  val ChatMsg: String = "Chat"
-  val AvailableChatsMsg: String = "AvailableChats"
-  val NewChatAvailableMsg: String = "NewChatAvailable"
-  val ChatNoLongerAvailableMsg: String = "ChatNoLongerAvailable"
+  val AvailableGamesMsg: String = "AvailableGames"
 
   implicit val notAuthenticatedWrites = Json.writes[NotAuthenticated]
   implicit val notAuthenticatedFormat = Json.format[NotAuthenticated]
 }
-

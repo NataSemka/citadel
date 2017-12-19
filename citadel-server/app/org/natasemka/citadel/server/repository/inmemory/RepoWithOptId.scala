@@ -2,24 +2,40 @@ package org.natasemka.citadel.server.repository.inmemory
 
 import org.natasemka.citadel.model.WithOptId
 
-case class RepoWithOptId[K, V <: WithOptId[K,V]]()(implicit val idGen: KeyGen[K]) extends InMemoryRepo[K, V] {
-  override def create(entity: V): V = {
-    val id = idGen.next
-    val s = entity.withId(id)
-    values.put(id, s)
-    s
+trait RepoWithOptId[K, V <: WithOptId[K,V]] extends InMemoryRepo[K, V] {
+  trait KeyGen[Key] {
+    def next: Key
   }
 
-  override def update(entity: V): Either[Exception, Boolean] = {
+  protected val idCounter: KeyGen[Long] = new KeyGen[Long] {
+    var counter: Long = -1
+    override def next: Long = {
+      counter = counter + 1
+      counter
+    }
+  }
+
+  protected def toChatId(counter: Long, entity: V): K
+
+  override def create(entity: V): V = {
+    val (id,e) = entity.id match {
+      case Some(assignedId) =>
+        if (entities.get(assignedId).isDefined)
+          throw new RuntimeException(s"$assignedId already exists")
+        else (assignedId, entity)
+      case _ =>
+        val generatedId = toChatId(idCounter.next, entity)
+        (generatedId, entity.withId(generatedId))
+    }
+    entities.put(id, e)
+    e
+  }
+
+  override def update(entity: V): Boolean = {
     entity.id match {
-      case Some(id) => values.put(id, entity)
+      case Some(id) => entities.put(id, entity)
       case None => create(entity)
     }
-    Right(true)
+    true
   }
 }
-
-trait KeyGen[Key] {
-  def next: Key
-}
-

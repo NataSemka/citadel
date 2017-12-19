@@ -17,16 +17,18 @@ trait CitadelMessage {
     case _: Rejected => RejectedMsg
 
     case _: Authenticated => AuthenticatedMsg
-    case _: LobbyInfo => LobbyInfoMsg
-    case _: UserJoinedLobby => UserJoinedLobbyMsg
 
     case _: ChatMessage => ChatMsg
+    case _: ChatInfo => ChatInfoMsg
+    case _: UserJoinedChat => UserJoinedChatMsg
+    case _: UserLeftChat => UserLeftChatMsg
 
     case _: CreateGame => CreateGameMsg
     case _: JoinGame => JoinGameMsg
     case _: LeaveGame => LeaveGameMsg
     case _: UserJoinedGame => UserJoinedGameMsg
     case _: UserLeftGame => UserLeftGameMsg
+    case _: AvailableGames => AvailableGamesMsg
 
     case _ => "Undefined"
   }
@@ -42,13 +44,49 @@ case class NotAuthenticated(reason: String) extends ServerMessage
 case class ServerError(name: String, reasons: Seq[String]) extends ServerMessage
 case class Rejected(title: String, request: String, reasons: Seq[String]) extends ServerMessage
 case object Rejected {
+  def apply(title: String, msg: CitadelMessage, reason: String): Rejected =
+    apply(title, msg.requestTitle, reason)
+
   def apply(title: String, request: String, reason: String): Rejected =
     Rejected(title, request, Seq(reason))
+
+  def internalServerError(msg: CitadelMessage, reason: String): Rejected =
+    apply("Internal Server Error", msg, reason)
+
+  def invalidRequest(msg: Any): Rejected =
+    invalidJson("Undefined", s"Invalid message format: $msg")
+
+  def notAuthenticated(msg: CitadelMessage): Rejected =
+    notAuthenticated(msg, "Not authenticated, sign in first")
+
+  def notAuthenticated(msg: CitadelMessage, reason: String) =
+    apply("Not Authenticated", msg, reason)
+
+  def notAuthorized(msg: CitadelMessage): Rejected =
+    notAuthorized(msg.requestTitle, "Session user id doesn't match request id")
+
+  def notAuthorized(msg: CitadelMessage, reason: String): Rejected =
+    notAuthorized(msg.requestTitle, reason)
+
+  def notAuthorized(request: String, reason: String): Rejected =
+    apply("Not Authorized", request, reason)
+
+  def undefined(reason: String) =
+    invalidJson("Undefined", reason)
+
+  def invalidJson(request: String): Rejected =
+    invalidJson(request, "Received a message that is not a valid JSON")
+
+  def invalidJson(request: String, reason: String): Rejected =
+    invalidJson(request, Seq(reason))
+
+  def invalidJson(request: String, reasons: Seq[String]): Rejected =
+    apply("Invalid JSON", request, reasons)
+
 }
 
 // lobby messages
 case class JoinLobby(user: User) extends ServerMessage
-case class LobbyInfo(users: Seq[User], games: Seq[GameSession]) extends ServerMessage
 
 // game session messages
 trait UserIdMessage extends UserMessage {
@@ -59,16 +97,22 @@ case class JoinGame(userId: String, gameId: String) extends UserIdMessage
 case class LeaveGame(userId: String) extends UserIdMessage
 case class UserJoinedGame(user: User, gameId: String) extends ServerMessage
 case class UserLeftGame(user: User, gameId: String) extends ServerMessage
+case class AvailableGames(games: Seq[GameSession]) extends ServerMessage
 
 trait LobbyEvent extends CitadelMessage
-case class UserJoinedLobby(user: User) extends LobbyEvent
-case class UserLeftLobby(user: User) extends LobbyEvent
 case class NewGameAvailable(game: GameSession) extends LobbyEvent
 case class GameNoLongerAvailable(game: GameSession) extends LobbyEvent
 
 trait ChatEvent extends CitadelMessage
+case class ChatInfo(chat: Chat, users: Seq[User]) extends ChatEvent
+case class UserJoinedChat(user: User, chatId: String) extends ChatEvent
+case class UserLeftChat(user: User, chat: Chat) extends ChatEvent
 case class ChatMessage(userId: String, chatId: String, message: String, timestamp: Option[Long])
   extends ChatEvent with UserIdMessage
+object ChatMessage {
+  def noSuchChat(chatId: String): Rejected =
+    Rejected("No Such Chat", ChatMsg, s"Chat $chatId does not exist")
+}
 case class SubToChat(chatId: String, client: ActorRef)
 case class UnsubFromChat(chatId: String, client: ActorRef)
 
@@ -83,24 +127,32 @@ object CitadelMessages {
   implicit val authenticatedFmt: OFormat[Authenticated] = Json.format[Authenticated]
   implicit val chatMessageFmt: OFormat[ChatMessage] = Json.format[ChatMessage]
 
-  implicit object colorWrites extends Writes[Color] {
-    override def writes(o: Color): JsValue = o match {
-      case Blue => Json.toJson("blue")
-      case Red => Json.toJson("red")
-      case Green => Json.toJson("green")
-      case Yellow => Json.toJson("yellow")
-      case Purple => Json.toJson("purple")
-      case _ => Json.toJson("unrecognized")
+
+
+  implicit object chatTypeWrites extends Writes[ChatType] {
+    override def writes(o: ChatType): JsValue = Json.toJson(o.toString)
+  }
+
+  implicit object chatTypeReads extends Reads[ChatType] {
+    override def reads(json: JsValue): JsResult[ChatType] = json match {
+      case JsString(id) => JsSuccess(ChatType.of(id))
+      case invalidType => JsError(s"Unrecognized chat type: $invalidType")
     }
+  }
+
+  implicit val chatFmt: OFormat[Chat] = Json.format[Chat]
+  implicit val userJoinedChatFmt: OFormat[UserJoinedChat] = Json.format[UserJoinedChat]
+  implicit val chatInfoFmt: OFormat[ChatInfo] = Json.format[ChatInfo]
+
+
+
+  implicit object colorWrites extends Writes[Color] {
+    override def writes(o: Color): JsValue = Json.toJson(o.id)
   }
 
   implicit object colorReads extends Reads[Color] {
     override def reads(json: JsValue): JsResult[Color] = json match {
-      case JsString("red") => JsSuccess(Red)
-      case JsString("blue") => JsSuccess(Blue)
-      case JsString("yellow") => JsSuccess(Yellow)
-      case JsString("green") => JsSuccess(Green)
-      case JsString("purple") => JsSuccess(Purple)
+      case JsString(id) => JsSuccess(Color.of(id))
       case invalidColor => JsError(s"Unrecognized color: $invalidColor")
     }
   }
@@ -117,8 +169,7 @@ object CitadelMessages {
   implicit val roundFmt: OFormat[Round] = Json.format[Round]
   implicit val gameSessionFmt: OFormat[GameSession] = Json.format[GameSession]
 
-  implicit val lobbyInfoFmt: OFormat[LobbyInfo] = Json.format[LobbyInfo]
-  implicit val userJoinedLobbyFmt: OFormat[UserJoinedLobby] = Json.format[UserJoinedLobby]
+  implicit val availableGamesFmt: OFormat[AvailableGames] = Json.format[AvailableGames]
 
   implicit def packagedMessageFmt: OFormat[PackagedMessage[CitadelMessage]] =
     new OFormat[PackagedMessage[CitadelMessage]] {
@@ -128,9 +179,10 @@ object CitadelMessages {
           case _: ServerError => write(serverErrorFmt)
           case _: Rejected => write(rejectedFmt)
           case _: Authenticated => write(authenticatedFmt)
-          case _: LobbyInfo => write(lobbyInfoFmt)
-          case _: UserJoinedLobby => write(userJoinedLobbyFmt)
+          case _: UserJoinedChat => write(userJoinedChatFmt)
           case _: ChatMessage => write(chatMessageFmt)
+          case _: ChatInfo => write(chatInfoFmt)
+          case _: AvailableGames => write(availableGamesFmt)
           case _ => throw new RuntimeException(s"Unrecognized CitadelMessage: $o")
         }
       }
