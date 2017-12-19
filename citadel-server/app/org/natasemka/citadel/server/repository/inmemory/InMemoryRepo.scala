@@ -15,14 +15,14 @@ trait InMemoryRepo[K,V] extends Repository[K,V] {
   override def get(ids: Seq[K]): Seq[V] =
     ids.map(get).filter(_.isDefined).map(_.get)
 
-  override def update(entities: Seq[V]): Seq[Either[Exception, Boolean]] =
+  override def update(entities: Seq[V]): Seq[Boolean] =
     entities.map(update)
 
-  override def delete(id: K): Either[Exception, Boolean] = {
+  override def delete(id: K): Boolean = {
     entities.remove(id)
-    Right(true)
+    true
   }
 
-  override def delete(ids: Seq[K]): Seq[Either[Exception, Boolean]] =
+  override def delete(ids: Seq[K]): Seq[Boolean] =
     ids.map(delete)
 }

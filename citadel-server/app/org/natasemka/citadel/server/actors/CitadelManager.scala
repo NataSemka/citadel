@@ -14,6 +14,7 @@ import play.api.libs.concurrent.InjectedActorSupport
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.util.{Failure, Success, Try}
 
 class CitadelManager @Inject()()
                      (implicit val system: ActorSystem,
@@ -32,23 +33,33 @@ class CitadelManager @Inject()()
   private val games = repositories.games
   private val chats = repositories.chats
 
-  //var topicCounter = 2
-  var lobbyId = "0"
-  //def lobbyTopic = "Lobby"
+  private val lobbyId = "Lobby"
+  private val lobby: Chat = Chat(Some(lobbyId), Lobby, lobbyId)
 
-  def unrecognizedCommand(cmd: Any) =
+  private def unrecognizedCommand(cmd: Any): Unit =
     logger.error(s"Received an unrecognized server command: $cmd")
+
+  override def preStart(): Unit = {
+    super.preStart()
+    chats.create(lobby)
+  }
 
   override def receive: Receive = {
     case msg: CitadelMessage =>
-      msg match {
-        case credentials: Credentials => signIn(credentials)
-        case chatMsg: ChatMessage => chat(chatMsg)
-        case createGameCmd: CreateGame => createGame(createGameCmd)
-        case _ => unrecognizedCommand(msg)
+      Try(handleRequest(msg)) match {
+        case Success(_) => // TODO emit success / seq of replies ?
+        case Failure(e) => Rejected.internalServerError(msg, e.getMessage)
       }
     case _ => unrecognizedCommand(_)
   }
+
+  def handleRequest(msg: CitadelMessage): Unit =
+    msg match {
+      case credentials: Credentials => signIn(credentials)
+      case chatMsg: ChatMessage => chat(chatMsg)
+      case createGameCmd: CreateGame => createGame(createGameCmd)
+      case _ => unrecognizedCommand(msg)
+    }
 
   def signIn(credentials: Credentials): Unit = {
     logger.debug(s"Sign in request from ${credentials.userId}")
@@ -63,30 +74,38 @@ class CitadelManager @Inject()()
   def getUser(credentials: Credentials): Either[CitadelMessage, User] = {
     val (userId, password) = (credentials.userId, credentials.password)
     users.signIn(userId, password) match {
-      case Right(_) => _
-      case Left(e) => Left(Rejected("Not Authenticated", SignInMsg, e.getMessage))
+      case Right(user) => Right(user)
+      case Left(e) => Left(Rejected.notAuthenticated(credentials, e.getMessage))
     }
   }
 
   def loadUser(user: User): Unit = {
+    val privateChat = chats.create(Chat(Some(user.id), Private, user.id))
+    joinChat(user, privateChat)
     games.ofUser(user.id) match {
       case Some(session) => sender ! session
-      case None => joinLobby(user)
+      case _ => joinLobby(user)
     }
   }
 
-//  def joinLobby(user: User): Unit = {
-//    val topic = lobbyTopic
-//    mediator ! Subscribe(lobbyId, sender)
-//    mediator ! Publish(topic, UserJoinedLobby(user))
-//    sender ! LobbyInfo(usersInLobby, Seq.empty)
-//  }
-  def joinChat(user)
-
-  def usersInLobby: Seq[User] = {
-    val userIds = userById.keySet -- gameByUser.keySet
-    userById.filterKeys(userIds.contains).values.toSeq
+  def joinLobby(user: User): Unit = {
+    joinChat(user, lobby)
+    sender ! AvailableGames(games.pending)
   }
+
+  def joinChat(user: User, chat: Chat): Unit =
+    chat.id match {
+      case Some(chatId) =>
+        chats.subscribe(user.id, chatId)
+        mediator ! Subscribe(chatId, sender)
+        chat.`type` match {
+          case Private =>
+          case _ =>
+            sender ! ChatInfo(chat, chat)
+            mediator ! Publish(chatId, UserJoinedChat(user, chat.id.get))
+        }
+      case None => throw new RuntimeException(s"Encountered a chat without id: $chat")
+    }
 
   def createGame(cmd: CreateGame): GameSession = ???
 //  {
@@ -100,8 +119,19 @@ class CitadelManager @Inject()()
   def joinGame(sessionId: Int, user: User): Unit = ???
 
   def chat(chatMsg: ChatMessage): Unit = {
-    val withTimestamp = chatMsg.copy(timestamp = Some(System.currentTimeMillis()))
-    mediator ! Publish(chatMsg.chatId.toString, withTimestamp)
+    val chatId = chatMsg.chatId
+    chats.get(chatId) match {
+      case Some(_) =>
+        if (chats.usersIn(chatId).contains(chatMsg.userId)) {
+          val withTimestamp = chatMsg.copy(timestamp = Some(System.currentTimeMillis()))
+          mediator ! Publish(chatId, withTimestamp)
+        } else
+          sender ! Rejected("No Such Chat", ChatMsg, s"Chat $chatId does not exist")
+      case _ => sender ! Rejected("No Such Chat", ChatMsg, s"Chat $chatId does not exist")
+    }
   }
+
+  implicit def usersInChat(chat: Chat): Seq[User] =
+    users.get(chats.usersIn(chat.id.get))
 
 }

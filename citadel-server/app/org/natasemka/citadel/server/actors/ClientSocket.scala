@@ -33,7 +33,7 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
   def handleUserRequest(msg: String): Unit = {
     Try(Json.parse(msg)) match {
       case Success(json) => handleUserRequest(json)
-      case Failure(e) => rejectInvalidJson("Undefined", e.getMessage)
+      case Failure(e) => reject(Rejected.undefined(e.getMessage))
     }
   }
 
@@ -51,21 +51,21 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     }
 
     Json.fromJson[PackagedMessage[CitadelMessage]](msg) match {
-      case JsSuccess(PackagedMessage(title, body), _) => handleUserRequest(title, body)
+      case JsSuccess(PackagedMessage(_, body), _) => handleUserRequest(body)
       case error: JsError =>
         val errors = reasons ++ error
-        rejectInvalidJson(request, errors)
+        reject(Rejected.invalidJson(request, errors))
     }
   }
 
-  def handleUserRequest(title: String, msg: CitadelMessage): Unit =
+  def handleUserRequest(msg: CitadelMessage): Unit =
     (userId, msg) match {
-      case (Some(id), msgWithId: UserIdMessage) if (id != msgWithId.userId) =>
-        rejectNotAuthorized(title)
+      case (Some(id), msgWithId: UserIdMessage) if id != msgWithId.userId =>
+        reject(Rejected.notAuthorized(msg))
       case (None, _: Credentials) =>
         manager ! msg
       case (None, _) =>
-        rejectNotAuthenticated(title)
+        reject(Rejected.notAuthenticated(msg))
       case _ =>
         manager ! msg
     }
@@ -80,34 +80,11 @@ class ClientSocket @Inject()(@Assisted out: ActorRef, @Assisted manager: ActorRe
     out ! msg.packageJson
   }
 
-
   def handleInvalidRequest(msg: Any): Unit =
-    rejectInvalidJson("Undefined", s"Invalid message format: $msg")
+    reject(Rejected.invalidRequest(msg))
 
-  def rejectNotAuthenticated(request: String): Unit =
-    rejectNotAuthorized(request, "Not authenticated, sign in first")
-
-  def rejectNotAuthorized(request: String): Unit =
-    rejectNotAuthorized(request, "Session user id doesn't match request id")
-
-  def rejectNotAuthorized(request: String, reason: String): Unit =
-    reject("Not Authorized", request, reason)
-
-  def rejectInvalidJson(request: String): Unit =
-    rejectInvalidJson(request, "Received a message that is not a valid JSON")
-
-  def rejectInvalidJson(request: String, reason: String): Unit =
-    rejectInvalidJson(request, Seq(reason))
-
-  def rejectInvalidJson(request: String, reasons: Seq[String]) =
-    reject("Invalid JSON", request, reasons)
-
-  def reject(title: String, request: String, reason: String): Unit =
-    reject(title, request, Seq(reason))
-
-  def reject(title: String, request: String, reason: Seq[String]): Unit =
-    out ! Rejected(title, request, reason).packageJson
-
+  def reject(msg: Rejected): Unit =
+    out ! msg.packageJson
 }
 
 object ClientSocket {

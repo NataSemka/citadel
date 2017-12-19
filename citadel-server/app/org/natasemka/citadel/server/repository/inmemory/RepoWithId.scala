@@ -8,9 +8,9 @@ case class RepoWithId[K,V <: WithId[K]]() extends InMemoryRepo[K,V] {
     entity
   }
 
-  override def update(entity: V): Either[Exception, Boolean] = {
+  override def update(entity: V): Boolean = {
     entities.put(entity.id, entity)
-    Right(true)
+    true
   }
 
 }

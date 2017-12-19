@@ -45,16 +45,16 @@ object Chats extends RepoWithOptId[String, Chat] with ChatRepo {
       })
     })
 
-  private def setFromMapToSeq[K,V](map: mutable.Map[K,mutable.Set[V]], key: K): Either[Exception, Seq[V]] =
+  private def setFromMapToSeq[K,V](map: mutable.Map[K,mutable.Set[V]], key: K): Seq[V] =
     map.get(key) match {
-      case Some(set) => Right(set.toSeq)
-      case _ => Right(Seq.empty)
+      case Some(set) => set.toSeq
+      case _ => Seq.empty
     }
 
-  override def usersIn(chatId: String): Either[Exception, Seq[String]] =
+  override def usersIn(chatId: String): Seq[String] =
     setFromMapToSeq(users, chatId)
 
-  override def ofUser(userId: String): Either[Exception, Seq[Chat]] =
+  override def ofUser(userId: String): Seq[Chat] =
     setFromMapToSeq(byUser, userId)
 
 }

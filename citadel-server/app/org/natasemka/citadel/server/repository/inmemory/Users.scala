@@ -16,7 +16,7 @@ object Users extends RepoWithId[String, User] with UserRepo {
       case Some(exstPass) =>
         if (exstPass != password) Left(new RuntimeException("Invalid password"))
         else entities.get(login) match {
-          case (Some(user)) => Right(user)
+          case Some(user) => Right(user)
           case _ => Left(new RuntimeException(internalError(login)))
         }
       case _ => signUp(login, password)

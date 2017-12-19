@@ -18,19 +18,24 @@ trait RepoWithOptId[K, V <: WithOptId[K,V]] extends InMemoryRepo[K, V] {
   protected def toChatId(counter: Long, entity: V): K
 
   override def create(entity: V): V = {
-    val id = toChatId(idCounter.next, entity)
-    val s = entity.withId(id)
-    entities.put(id, s)
-    s
+    val (id,e) = entity.id match {
+      case Some(assignedId) =>
+        if (entities.get(assignedId).isDefined)
+          throw new RuntimeException(s"$assignedId already exists")
+        else (assignedId, entity)
+      case _ =>
+        val generatedId = toChatId(idCounter.next, entity)
+        (generatedId, entity.withId(generatedId))
+    }
+    entities.put(id, e)
+    e
   }
 
-  override def update(entity: V): Either[Exception, Boolean] = {
+  override def update(entity: V): Boolean = {
     entity.id match {
       case Some(id) => entities.put(id, entity)
       case None => create(entity)
     }
-    Right(true)
+    true
   }
 }
-
-
